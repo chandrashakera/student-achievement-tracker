@@ -1,13 +1,17 @@
 /**
  * Student Achievement Tracker — Apps Script backend.
  *
- * Web App endpoint that accepts a single JSON POST containing the student's
- * roll no., the structured certificate fields, and the certificate file
- * (base64-encoded). It appends a row to the tracker Sheet and saves the file
- * to a Drive folder.
+ * Web App endpoint with two JSON-POST actions:
+ *   - action "submit" (default, for backward compatibility with Phase 1
+ *     payloads that omit "action"): appends a row to the tracker Sheet and
+ *     saves the certificate file to Drive.
+ *   - action "structure": proxies raw OCR/PDF text to Gemini and returns
+ *     structured fields. Added in Phase 2 so the Gemini API key stays in
+ *     Script Properties and is never shipped to the browser.
  *
- * Wire format (POST body, JSON):
+ * ---- submit — wire format (POST body, JSON) ----
  * {
+ *   "action": "submit",
  *   "rollNo": "21A91A0501",
  *   "name": "...",
  *   "certificateType": "Participation" | "Appreciation" | "Position",
@@ -19,14 +23,28 @@
  *   "mimeType": "image/jpeg",
  *   "fileBase64": "<base64 string, no data: prefix>"
  * }
+ * Response: { "success": true, "fileUrl": "https://drive.google.com/..." }
+ *        or { "success": false, "error": "..." }
  *
- * Response (JSON): { "success": true, "fileUrl": "https://drive.google.com/..." }
- *                or { "success": false, "error": "..." }
+ * ---- structure — wire format (POST body, JSON) ----
+ * { "action": "structure", "text": "<raw OCR/PDF text>" }
+ * Response: { "success": true, "fields": { "Name": "...", "Certificate Type": "...",
+ *             "Position/Rank": "...", "Event/Course/Activity": "...",
+ *             "Issuing Body": "...", "Date": "..." } }
+ *        or { "success": false, "error": "..." }
  *
  * ---- ONE-TIME SETUP (before deploying) ----
  * In the script editor: Project Settings (gear icon) > Script Properties > add:
  *   SHEET_ID        - ID of the target Google Sheet (from its URL)
  *   DRIVE_FOLDER_ID - ID of the target Drive folder (from its URL)
+ *   GEMINI_API_KEY  - API key from aistudio.google.com
+ *   GEMINI_MODEL    - optional; defaults to 'gemini-2.0-flash' if unset (see
+ *                      GEMINI_MODEL_DEFAULT below — override here if Google
+ *                      renames/retires that model on their free tier)
+ * The extraction prompt itself lives in GeminiPrompt.gs, kept separate so it
+ * can be tuned without touching request-handling logic. It must be kept in
+ * sync with prompts/gemini-extraction-prompt.js (the reviewable draft copy)
+ * if edited — Apps Script can't import that file directly.
  * See README.md at the repo root for full deployment steps.
  */
 
@@ -39,29 +57,46 @@ var HEADERS = [
 
 var ALLOWED_CERT_TYPES = ['Participation', 'Appreciation', 'Position'];
 var ALLOWED_POSITIONS = ['', 'Winner', 'Runner-up', '1st Position', '2nd Position', '3rd Position'];
+var GEMINI_MODEL_DEFAULT = 'gemini-2.0-flash';
 
 function doPost(e) {
   try {
     var body = parseRequestBody_(e);
-    validatePayload_(body);
+    var action = body.action || 'submit';
 
-    var fileUrl = saveFileToDrive_(body.fileName, body.mimeType, body.fileBase64, body.rollNo);
-
-    appendRow_({
-      rollNo: body.rollNo,
-      name: body.name,
-      certificateType: body.certificateType,
-      positionRank: body.positionRank || '',
-      event: body.event,
-      issuingBody: body.issuingBody,
-      date: body.date,
-      fileUrl: fileUrl
-    });
-
-    return jsonResponse_({ success: true, fileUrl: fileUrl });
+    if (action === 'structure') {
+      return jsonResponse_({ success: true, fields: handleStructureRequest_(body) });
+    }
+    return handleSubmitRequest_(body);
   } catch (err) {
     return jsonResponse_({ success: false, error: err.message });
   }
+}
+
+function handleSubmitRequest_(body) {
+  validatePayload_(body);
+
+  var fileUrl = saveFileToDrive_(body.fileName, body.mimeType, body.fileBase64, body.rollNo);
+
+  appendRow_({
+    rollNo: body.rollNo,
+    name: body.name,
+    certificateType: body.certificateType,
+    positionRank: body.positionRank || '',
+    event: body.event,
+    issuingBody: body.issuingBody,
+    date: body.date,
+    fileUrl: fileUrl
+  });
+
+  return jsonResponse_({ success: true, fileUrl: fileUrl });
+}
+
+function handleStructureRequest_(body) {
+  if (!body.text || !String(body.text).trim()) {
+    throw new Error('Missing required field: text');
+  }
+  return callGeminiForStructuring_(String(body.text));
 }
 
 // Lets you sanity-check the deployment URL in a browser (GET request).
@@ -140,6 +175,78 @@ function getRequiredProperty_(key) {
     throw new Error('Missing script property: ' + key + '. Set it in Project Settings > Script Properties.');
   }
   return value;
+}
+
+// Calls Gemini with the extraction prompt (GeminiPrompt.gs) and the raw OCR
+// text, and returns a sanitized fields object ready for the confirmation
+// screen. Never throws on a malformed/out-of-vocabulary Certificate Type or
+// Position/Rank — it clamps those to safe defaults instead, since the
+// confirmation screen is the actual data-integrity safeguard and the
+// student can correct anything here.
+function callGeminiForStructuring_(rawText) {
+  var apiKey = getRequiredProperty_('GEMINI_API_KEY');
+  var model = PropertiesService.getScriptProperties().getProperty('GEMINI_MODEL') || GEMINI_MODEL_DEFAULT;
+  var url = 'https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + encodeURIComponent(apiKey);
+
+  var prompt = GEMINI_EXTRACTION_PROMPT.replace('{{OCR_TEXT}}', rawText);
+  var payload = {
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: { responseMimeType: 'application/json' }
+  };
+
+  var response = UrlFetchApp.fetch(url, {
+    method: 'post',
+    contentType: 'application/json',
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true
+  });
+
+  var status = response.getResponseCode();
+  if (status < 200 || status >= 300) {
+    throw new Error('Gemini API error (HTTP ' + status + '): ' + response.getContentText());
+  }
+
+  var apiResult = JSON.parse(response.getContentText());
+  var candidateText = apiResult
+    && apiResult.candidates
+    && apiResult.candidates[0]
+    && apiResult.candidates[0].content
+    && apiResult.candidates[0].content.parts
+    && apiResult.candidates[0].content.parts[0]
+    && apiResult.candidates[0].content.parts[0].text;
+
+  if (!candidateText) {
+    throw new Error('Gemini returned no extractable content.');
+  }
+
+  var parsed;
+  try {
+    parsed = JSON.parse(candidateText);
+  } catch (parseErr) {
+    throw new Error('Gemini response was not valid JSON: ' + candidateText);
+  }
+
+  return sanitizeGeminiFields_(parsed);
+}
+
+function sanitizeGeminiFields_(fields) {
+  fields = fields || {};
+  var certificateType = fields['Certificate Type'];
+  if (ALLOWED_CERT_TYPES.indexOf(certificateType) === -1) {
+    certificateType = 'Participation';
+  }
+  var positionRank = fields['Position/Rank'];
+  if (ALLOWED_POSITIONS.indexOf(positionRank) === -1) {
+    positionRank = '';
+  }
+  return {
+    'Name': fields['Name'] || '',
+    'Certificate Type': certificateType,
+    'Position/Rank': positionRank,
+    'Event/Course/Activity': fields['Event/Course/Activity'] || '',
+    'Issuing Body': fields['Issuing Body'] || '',
+    'Date': fields['Date'] || ''
+  };
 }
 
 function jsonResponse_(obj) {

@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Student Achievement Tracker</title>
+<meta name="theme-color" content="#0f172a">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon.svg">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<main id="app">
+
+  <!-- Screen 1: Home -->
+  <section id="screen-home" class="screen">
+    <h1>Student Achievement Tracker</h1>
+    <p class="hint">Enter your roll number, then scan or upload your certificate.</p>
+
+    <label for="rollNoInput">Roll No.</label>
+    <input id="rollNoInput" type="text" autocomplete="off" placeholder="e.g. 21A91A0501">
+
+    <div class="button-stack">
+      <button id="scanBtn" type="button" disabled>Scan Certificate</button>
+      <button id="uploadBtn" type="button" disabled>Upload Certificate</button>
+    </div>
+
+    <input id="cameraInput" type="file" accept="image/*" capture="environment" hidden>
+    <input id="fileInput" type="file" accept="image/*,application/pdf" hidden>
+  </section>
+
+  <!-- Screen 2: Preview -->
+  <section id="screen-preview" class="screen hidden">
+    <h1>Review your capture</h1>
+    <div id="previewArea" class="preview-area"></div>
+    <div class="button-row">
+      <button id="retakeBtn" type="button" class="secondary">Retake</button>
+      <button id="proceedBtn" type="button">Proceed</button>
+    </div>
+  </section>
+
+  <!-- Screen 3: Processing -->
+  <section id="screen-processing" class="screen hidden">
+    <h1>Processing</h1>
+    <div class="spinner"></div>
+    <p id="processingStatus" class="hint">Working...</p>
+    <p id="processingError" class="error hidden"></p>
+    <button id="processingBackBtn" type="button" class="secondary hidden">Back</button>
+  </section>
+
+  <!-- Screen 4: Confirm -->
+  <section id="screen-confirm" class="screen hidden">
+    <h1>Confirm details</h1>
+    <p class="hint">Check every field against the certificate — OCR and AI extraction can misread text.</p>
+
+    <label for="confirmRollNo">Roll No.</label>
+    <input id="confirmRollNo" type="text">
+
+    <label for="confirmName">Name</label>
+    <input id="confirmName" type="text">
+
+    <label for="confirmCertType">Certificate Type</label>
+    <select id="confirmCertType">
+      <option value="Participation">Participation</option>
+      <option value="Appreciation">Appreciation</option>
+      <option value="Position">Position</option>
+    </select>
+
+    <label for="confirmPositionRank">Position/Rank</label>
+    <select id="confirmPositionRank">
+      <option value="">(none)</option>
+      <option value="Winner">Winner</option>
+      <option value="Runner-up">Runner-up</option>
+      <option value="1st Position">1st Position</option>
+      <option value="2nd Position">2nd Position</option>
+      <option value="3rd Position">3rd Position</option>
+    </select>
+
+    <label for="confirmEvent">Event/Course/Activity</label>
+    <input id="confirmEvent" type="text">
+
+    <label for="confirmIssuingBody">Issuing Body</label>
+    <input id="confirmIssuingBody" type="text">
+
+    <label for="confirmDate">Date</label>
+    <input id="confirmDate" type="text" placeholder="e.g. 15 Mar 2026 or Mar 2026">
+
+    <p id="confirmError" class="error hidden"></p>
+
+    <div class="button-row">
+      <button id="startOverBtn" type="button" class="secondary">Start Over</button>
+      <button id="submitBtn" type="button">Submit</button>
+    </div>
+  </section>
+
+  <!-- Screen 5: Done -->
+  <section id="screen-done" class="screen hidden">
+    <h1 id="doneTitle">Submitted</h1>
+    <p id="doneMessage" class="hint"></p>
+    <a id="doneFileLink" class="hidden" target="_blank" rel="noopener">View saved file</a>
+    <button id="submitAnotherBtn" type="button">Submit Another Certificate</button>
+  </section>
+
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

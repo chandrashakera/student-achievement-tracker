@@ -1,14 +1,16 @@
 /**
- * Gemini field-extraction prompt — DRAFT, for review only.
+ * Gemini field-extraction prompt — reviewable draft copy.
  *
- * NOT wired into any pipeline yet. This is Phase 2 material, kept in its own
- * file so the prompt text can be reviewed and tuned independently of the
- * OCR/Gemini calling code that will eventually import it.
+ * WIRED IN as of Phase 2, but not from this file: Apps Script has no
+ * import/require, so the live copy that actually gets sent to Gemini lives
+ * in backend/GeminiPrompt.gs (executed server-side, proxied from the
+ * frontend via the Web App's "structure" action — see Code.gs). This file
+ * is kept as the human-reviewable/tunable source; if you change the wording
+ * here, port the same change into backend/GeminiPrompt.gs, since only that
+ * copy runs.
  *
- * Usage (Phase 2, once approved): interpolate the raw OCR/pdf.js text into
- * the {{OCR_TEXT}} placeholder below and send the result as the prompt in
- * the Gemini API request. Every hard requirement below traces back to a
- * specific line in claude_code_build_brief.md:
+ * Every hard requirement below traces back to a specific line in
+ * claude_code_build_brief.md:
  *   - Strict JSON, exact field names           -> "Gemini prompt requirements"
  *   - Position/Rank verbatim-only, never inferred -> Sheet schema, Position/Rank row
  *   - Date fallback to month-year granularity   -> Sheet schema, Date row
