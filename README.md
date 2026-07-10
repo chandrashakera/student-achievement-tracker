@@ -9,19 +9,21 @@ Full spec: [claude_code_build_brief.md](claude_code_build_brief.md)
 
 ## Status
 
-- **Phase 1 — backend: done, not yet deployed.** Google Apps Script Web App
-  that appends rows to a Sheet and saves files to Drive. See
-  [backend/](backend/) and the deployment steps below.
-- **Phase 2 — frontend: not started.** PWA (scan/upload → OCR → Gemini →
-  confirm → submit). Will land in [frontend/](frontend/) once Phase 1 is
-  confirmed working end-to-end.
+- **Phase 1 — backend: deployed and confirmed working** (row + file landed
+  correctly in testing). See [backend/](backend/).
+- **Phase 2 — frontend: built, not yet deployed to GitHub Pages/Vercel.**
+  PWA (scan/upload → OCR → Gemini → confirm → submit) lives in
+  [frontend/](frontend/). The backend was extended with a `structure` action
+  that proxies Gemini calls so the API key never reaches the browser — see
+  "Redeploying the backend for Phase 2" below, **required before the app can
+  structure certificates.**
 
 ## Repo layout
 
 ```
-backend/    Google Apps Script Web App (Code.gs, appsscript.json)
-frontend/   PWA (Phase 2, not yet built)
-prompts/    Gemini extraction prompt, versioned separately for review/tuning
+backend/    Google Apps Script Web App (Code.gs, GeminiPrompt.gs, appsscript.json)
+frontend/   PWA: index.html, app.js, style.css, config.js, manifest, service worker
+prompts/    Gemini extraction prompt, reviewable draft copy (see backend/GeminiPrompt.gs for the live one)
 ```
 
 ## Stack
@@ -47,11 +49,15 @@ Certificate Type.
 
 ## Backend wire format
 
-The frontend will POST a single JSON body (no multipart/form-data — see
-"Why base64 JSON" below):
+The Web App handles two JSON-POST actions on the same `/exec` URL (no
+multipart/form-data — see "Why base64 JSON" below):
+
+**`action: "submit"`** (default if `action` is omitted, for backward
+compatibility with the original Phase 1 payload):
 
 ```json
 {
+  "action": "submit",
   "rollNo": "21A91A0501",
   "name": "Jane Doe",
   "certificateType": "Participation",
@@ -65,12 +71,17 @@ The frontend will POST a single JSON body (no multipart/form-data — see
 }
 ```
 
-Response:
+Response: `{ "success": true, "fileUrl": "https://drive.google.com/file/d/.../view" }`
+or on error: `{ "success": false, "error": "..." }`
+
+**`action: "structure"`** (Phase 2, proxies Gemini so the API key stays
+server-side):
 
 ```json
-{ "success": true, "fileUrl": "https://drive.google.com/file/d/.../view" }
+{ "action": "structure", "text": "<raw OCR/PDF text>" }
 ```
 
+Response: `{ "success": true, "fields": { "Name": "...", "Certificate Type": "...", "Position/Rank": "...", "Event/Course/Activity": "...", "Issuing Body": "...", "Date": "..." } }`
 or on error: `{ "success": false, "error": "..." }`
 
 ### Why base64 JSON instead of multipart/form-data
@@ -197,9 +208,89 @@ should return `{"status":"ok","message":"Student Achievement Tracker backend
 is running."}`, a quick way to confirm the deployment itself is live before
 worrying about POST payloads.
 
-## Gemini extraction prompt (Phase 2, drafted early for review)
+## Gemini extraction prompt
 
-The prompt Gemini will use to turn raw OCR/PDF text into structured JSON is
-drafted in [prompts/gemini-extraction-prompt.js](prompts/gemini-extraction-prompt.js),
-kept separate from pipeline code so it can be reviewed and tuned
-independently. It is **not wired into any pipeline yet** — Phase 2 only.
+The prompt Gemini uses to turn raw OCR/PDF text into structured JSON is
+drafted in [prompts/gemini-extraction-prompt.js](prompts/gemini-extraction-prompt.js)
+for review/tuning. The version that actually executes is
+[backend/GeminiPrompt.gs](backend/GeminiPrompt.gs) — Apps Script can't
+import the `.js` file directly, so if you tune the wording, edit
+`GeminiPrompt.gs` and port the same change into the `.js` copy so they don't
+drift.
+
+## Redeploying the backend for Phase 2 (required before the app can structure certificates)
+
+Your Phase 1 deployment already works for submissions, but the new
+`structure` action needs the Gemini piece added:
+
+1. In the same Apps Script project, add a new script file: `File > New >
+   Script`, name it `GeminiPrompt`, paste in
+   [backend/GeminiPrompt.gs](backend/GeminiPrompt.gs).
+2. Replace `Code.gs` with the updated [backend/Code.gs](backend/Code.gs)
+   (adds the `structure` action; the `submit` action is unchanged and still
+   backward-compatible with your existing test payload).
+3. Get a Gemini API key at [aistudio.google.com](https://aistudio.google.com)
+   (free tier).
+4. Project Settings > Script Properties > add:
+
+   | Property | Value |
+   |---|---|
+   | `GEMINI_API_KEY` | the key from step 3 |
+   | `GEMINI_MODEL` | optional — only set this if you need to override the default. `Code.gs` currently defaults to `gemini-2.0-flash`; check aistudio.google.com for the current free-tier model name in case Google has renamed/retired it since this was written. |
+
+5. Deploy > Manage deployments > pencil icon > Version: **New version** >
+   Deploy. The `/exec` URL stays the same, so the frontend config doesn't
+   need to change.
+
+### Testing the `structure` action standalone
+
+```bash
+curl -X POST \
+  -H "Content-Type: text/plain;charset=utf-8" \
+  -d '{"action":"structure","text":"This certificate is awarded to Jane Doe for participation in the National Level Hackathon 2026 organized by XYZ College, held in March 2026."}' \
+  "https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec"
+```
+
+Expected response (values will vary with the exact text):
+
+```json
+{"success":true,"fields":{"Name":"Jane Doe","Certificate Type":"Participation","Position/Rank":"","Event/Course/Activity":"National Level Hackathon 2026","Issuing Body":"XYZ College","Date":"Mar 2026"}}
+```
+
+Try a payload whose text includes an explicit rank (e.g. "...awarded 1st
+Position to...") and confirm `Position/Rank` only gets filled when the rank
+is stated verbatim — and stays `""` for plain participation text even though
+its `Certificate Type` may still come back as something other than
+"Position".
+
+## Running the frontend locally
+
+The frontend is fully static — no build step. From the repo root:
+
+```bash
+npx serve frontend
+# or: cd frontend && python -m http.server 8000
+```
+
+Open the printed URL, enter a roll no., and try both Scan (needs a device
+camera — on a laptop this opens whatever webcam-backed capture the OS
+provides) and Upload (any image or PDF) through to the confirmation screen
+and submit. Check the Sheet/Drive folder afterward to confirm the row and
+file landed.
+
+Note: `frontend/config.js` currently points at the `/exec` URL from your
+Phase 1 deployment — if you ever create a new deployment (rather than a new
+version of the same one), update `CONFIG.WEBAPP_URL` there.
+
+## Deploying the frontend (GitHub Pages or Vercel, free tier)
+
+- **GitHub Pages:** push this repo to GitHub, then Settings > Pages > Deploy
+  from a branch > select the branch and set the folder to `/frontend` (or
+  move `frontend/`'s contents to the repo root / a `docs/` folder if Pages
+  in your account doesn't support arbitrary subfolders — check the Pages UI).
+- **Vercel:** `vercel` CLI or the dashboard, set the project's root directory
+  to `frontend/`, no build command needed (static site).
+
+Either way, the deployed site must be served over **HTTPS** for the service
+worker (installability) and camera capture to work reliably on mobile —
+both GitHub Pages and Vercel give you HTTPS by default.

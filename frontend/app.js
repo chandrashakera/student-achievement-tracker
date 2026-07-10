@@ -1,0 +1,280 @@
+// Student Achievement Tracker — frontend app logic.
+// Plain JS, no framework/build step (per brief). Single-page state machine
+// toggling five <section class="screen"> blocks in index.html.
+
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js';
+
+const state = {
+  rollNo: '',
+  file: null,       // the selected/captured File
+  fileType: null,   // 'pdf' | 'image'
+  fields: null       // structured fields from Gemini, pre-fill for confirm screen
+};
+
+// ---- DOM refs ----
+const screens = {
+  home: document.getElementById('screen-home'),
+  preview: document.getElementById('screen-preview'),
+  processing: document.getElementById('screen-processing'),
+  confirm: document.getElementById('screen-confirm'),
+  done: document.getElementById('screen-done')
+};
+
+const rollNoInput = document.getElementById('rollNoInput');
+const scanBtn = document.getElementById('scanBtn');
+const uploadBtn = document.getElementById('uploadBtn');
+const cameraInput = document.getElementById('cameraInput');
+const fileInput = document.getElementById('fileInput');
+
+const previewArea = document.getElementById('previewArea');
+const retakeBtn = document.getElementById('retakeBtn');
+const proceedBtn = document.getElementById('proceedBtn');
+
+const processingStatus = document.getElementById('processingStatus');
+const processingError = document.getElementById('processingError');
+const processingBackBtn = document.getElementById('processingBackBtn');
+
+const confirmRollNo = document.getElementById('confirmRollNo');
+const confirmName = document.getElementById('confirmName');
+const confirmCertType = document.getElementById('confirmCertType');
+const confirmPositionRank = document.getElementById('confirmPositionRank');
+const confirmEvent = document.getElementById('confirmEvent');
+const confirmIssuingBody = document.getElementById('confirmIssuingBody');
+const confirmDate = document.getElementById('confirmDate');
+const confirmError = document.getElementById('confirmError');
+const startOverBtn = document.getElementById('startOverBtn');
+const submitBtn = document.getElementById('submitBtn');
+
+const doneTitle = document.getElementById('doneTitle');
+const doneMessage = document.getElementById('doneMessage');
+const doneFileLink = document.getElementById('doneFileLink');
+const submitAnotherBtn = document.getElementById('submitAnotherBtn');
+
+// ---- Screen helper ----
+function showScreen(name) {
+  Object.values(screens).forEach((el) => el.classList.add('hidden'));
+  screens[name].classList.remove('hidden');
+}
+
+// ---- Home screen ----
+rollNoInput.addEventListener('input', () => {
+  state.rollNo = rollNoInput.value.trim();
+  const enabled = state.rollNo.length > 0;
+  scanBtn.disabled = !enabled;
+  uploadBtn.disabled = !enabled;
+});
+
+scanBtn.addEventListener('click', () => cameraInput.click());
+uploadBtn.addEventListener('click', () => fileInput.click());
+
+cameraInput.addEventListener('change', (e) => handleFileSelected(e.target.files[0]));
+fileInput.addEventListener('change', (e) => handleFileSelected(e.target.files[0]));
+
+function handleFileSelected(file) {
+  if (!file) return;
+  state.file = file;
+  state.fileType = file.type === 'application/pdf' ? 'pdf' : 'image';
+  // reset inputs so selecting the same file again still fires 'change'
+  cameraInput.value = '';
+  fileInput.value = '';
+  renderPreview(file);
+  showScreen('preview');
+}
+
+// ---- Preview screen ----
+async function renderPreview(file) {
+  previewArea.innerHTML = '';
+  if (state.fileType === 'image') {
+    const img = document.createElement('img');
+    img.src = URL.createObjectURL(file);
+    previewArea.appendChild(img);
+    return;
+  }
+  // PDF: render page 1 to a canvas so the student can visually check it too
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    const page = await pdf.getPage(1);
+    const viewport = page.getViewport({ scale: 1.2 });
+    const canvas = document.createElement('canvas');
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+    previewArea.appendChild(canvas);
+  } catch (err) {
+    const placeholder = document.createElement('div');
+    placeholder.className = 'pdf-placeholder';
+    placeholder.textContent = 'PDF selected: ' + file.name;
+    previewArea.appendChild(placeholder);
+  }
+}
+
+retakeBtn.addEventListener('click', () => {
+  state.file = null;
+  state.fileType = null;
+  showScreen('home');
+});
+
+proceedBtn.addEventListener('click', () => {
+  showScreen('processing');
+  processingError.classList.add('hidden');
+  processingBackBtn.classList.add('hidden');
+  runPipeline().catch((err) => {
+    processingStatus.textContent = 'Something went wrong.';
+    processingError.textContent = err.message || String(err);
+    processingError.classList.remove('hidden');
+    processingBackBtn.classList.remove('hidden');
+  });
+});
+
+processingBackBtn.addEventListener('click', () => showScreen('preview'));
+
+// ---- Processing pipeline: extract text -> Gemini structuring -> confirm screen ----
+async function runPipeline() {
+  processingStatus.textContent = state.fileType === 'pdf'
+    ? 'Extracting text from PDF...'
+    : 'Reading certificate (this can take a few seconds)...';
+
+  const rawText = state.fileType === 'pdf'
+    ? await extractPdfText(state.file)
+    : await runOcr(state.file);
+
+  processingStatus.textContent = 'Structuring data with AI...';
+  state.fields = await callStructureApi(rawText);
+
+  populateConfirmScreen();
+  showScreen('confirm');
+}
+
+async function extractPdfText(file) {
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  let text = '';
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    text += content.items.map((item) => item.str).join(' ') + '\n';
+  }
+  return text;
+}
+
+function runOcr(file) {
+  return Tesseract.recognize(file, 'eng', {
+    logger: (m) => {
+      if (m.status === 'recognizing text' && typeof m.progress === 'number') {
+        processingStatus.textContent = 'Reading certificate... ' + Math.round(m.progress * 100) + '%';
+      }
+    }
+  }).then((result) => result.data.text);
+}
+
+async function callStructureApi(text) {
+  const response = await fetch(CONFIG.WEBAPP_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // avoids CORS preflight
+    body: JSON.stringify({ action: 'structure', text })
+  });
+  const result = await response.json();
+  if (!result.success) {
+    throw new Error(result.error || 'Failed to structure certificate data.');
+  }
+  return result.fields;
+}
+
+// ---- Confirm screen ----
+function populateConfirmScreen() {
+  const fields = state.fields || {};
+  confirmRollNo.value = state.rollNo;
+  confirmName.value = fields['Name'] || '';
+  confirmCertType.value = fields['Certificate Type'] || 'Participation';
+  confirmPositionRank.value = fields['Position/Rank'] || '';
+  confirmEvent.value = fields['Event/Course/Activity'] || '';
+  confirmIssuingBody.value = fields['Issuing Body'] || '';
+  confirmDate.value = fields['Date'] || '';
+  confirmError.classList.add('hidden');
+}
+
+startOverBtn.addEventListener('click', () => resetToHome());
+
+submitBtn.addEventListener('click', () => {
+  submitCertificate().catch((err) => {
+    confirmError.textContent = err.message || String(err);
+    confirmError.classList.remove('hidden');
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Submit';
+  });
+});
+
+async function submitCertificate() {
+  const payload = {
+    action: 'submit',
+    rollNo: confirmRollNo.value.trim(),
+    name: confirmName.value.trim(),
+    certificateType: confirmCertType.value,
+    positionRank: confirmPositionRank.value,
+    event: confirmEvent.value.trim(),
+    issuingBody: confirmIssuingBody.value.trim(),
+    date: confirmDate.value.trim()
+  };
+
+  const missing = ['rollNo', 'name', 'event', 'issuingBody', 'date'].filter((key) => !payload[key]);
+  if (missing.length) {
+    throw new Error('Please fill in all fields before submitting.');
+  }
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Submitting...';
+
+  const base64 = await fileToBase64(state.file);
+  payload.fileName = state.file.name || ('capture_' + Date.now() + (state.fileType === 'pdf' ? '.pdf' : '.jpg'));
+  payload.mimeType = state.file.type || (state.fileType === 'pdf' ? 'application/pdf' : 'image/jpeg');
+  payload.fileBase64 = base64;
+
+  const response = await fetch(CONFIG.WEBAPP_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(payload)
+  });
+  const result = await response.json();
+  if (!result.success) {
+    throw new Error(result.error || 'Submission failed.');
+  }
+
+  doneTitle.textContent = 'Submitted';
+  doneMessage.textContent = 'Your certificate has been recorded.';
+  doneFileLink.href = result.fileUrl;
+  doneFileLink.classList.remove('hidden');
+  submitBtn.disabled = false;
+  submitBtn.textContent = 'Submit';
+  showScreen('done');
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = () => reject(new Error('Could not read the file.'));
+    reader.readAsDataURL(file);
+  });
+}
+
+// ---- Done screen ----
+submitAnotherBtn.addEventListener('click', () => resetToHome());
+
+function resetToHome() {
+  state.file = null;
+  state.fileType = null;
+  state.fields = null;
+  doneFileLink.classList.add('hidden');
+  showScreen('home');
+}
+
+// ---- PWA install ----
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {
+      // Non-fatal: app still works without offline shell caching.
+    });
+  });
+}
