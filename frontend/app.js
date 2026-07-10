@@ -1,9 +1,14 @@
 // Student Achievement Tracker — frontend app logic.
 // Plain JS, no framework/build step (per brief). Single-page state machine
 // toggling five <section class="screen"> blocks in index.html.
+//
+// Loaded as a native ES module (see index.html) because current pdf.js
+// versions only ship as .mjs — there's no classic UMD build to load via a
+// plain <script> tag anymore.
+import * as pdfjsLib from 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.1.200/pdf.min.mjs';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc =
-  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js';
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.1.200/pdf.worker.min.mjs';
 
 const state = {
   rollNo: '',
