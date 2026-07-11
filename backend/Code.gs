@@ -58,7 +58,11 @@ var HEADERS = [
   'Event/Course/Activity', 'Issuing Body', 'Date', 'File Link', 'Timestamp'
 ];
 
-var ALLOWED_CERT_TYPES = ['Participation', 'Appreciation', 'Position'];
+// Certificate Type has three fixed categories plus a free-text "Other" case
+// (student/Gemini supply their own short phrase, e.g. "Completion",
+// "Excellence" — whatever follows "Certificate of ___"). So unlike
+// Position/Rank below, it's validated as non-empty only, not against an enum.
+var CERT_TYPE_DEFAULT = 'Participation';
 var ALLOWED_POSITIONS = ['', 'Winner', 'Runner-up', '1st Position', '2nd Position', '3rd Position'];
 var GEMINI_MODEL_DEFAULT = 'gemini-3.1-flash-lite'; // gemini-2.0-flash (retired) and gemini-2.5-flash-lite (early-blocked ahead of its Oct 2026 shutdown) both stopped working; verified against this account's live /v1beta/models listing
 
@@ -128,9 +132,6 @@ function validatePayload_(body) {
     if (!body[key]) {
       throw new Error('Missing required field: ' + key);
     }
-  }
-  if (ALLOWED_CERT_TYPES.indexOf(body.certificateType) === -1) {
-    throw new Error('Invalid Certificate Type: ' + body.certificateType);
   }
   if (body.positionRank && ALLOWED_POSITIONS.indexOf(body.positionRank) === -1) {
     throw new Error('Invalid Position/Rank: ' + body.positionRank);
@@ -234,10 +235,7 @@ function callGeminiForStructuring_(rawText) {
 
 function sanitizeGeminiFields_(fields) {
   fields = fields || {};
-  var certificateType = fields['Certificate Type'];
-  if (ALLOWED_CERT_TYPES.indexOf(certificateType) === -1) {
-    certificateType = 'Participation';
-  }
+  var certificateType = fields['Certificate Type'] || CERT_TYPE_DEFAULT;
   var positionRank = fields['Position/Rank'];
   if (ALLOWED_POSITIONS.indexOf(positionRank) === -1) {
     positionRank = '';

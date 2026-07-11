@@ -43,6 +43,8 @@ const processingBackBtn = document.getElementById('processingBackBtn');
 const confirmRollNo = document.getElementById('confirmRollNo');
 const confirmName = document.getElementById('confirmName');
 const confirmCertType = document.getElementById('confirmCertType');
+const confirmCertTypeOther = document.getElementById('confirmCertTypeOther');
+const confirmCertTypeOtherHint = document.getElementById('confirmCertTypeOtherHint');
 const confirmPositionRank = document.getElementById('confirmPositionRank');
 const confirmEvent = document.getElementById('confirmEvent');
 const confirmIssuingBody = document.getElementById('confirmIssuingBody');
@@ -188,11 +190,36 @@ async function callStructureApi(text) {
 }
 
 // ---- Confirm screen ----
+// The three fixed categories; anything else (a custom phrase from Gemini, or
+// the student's own wording) is treated as "Other" with free text.
+const FIXED_CERT_TYPES = ['Participation', 'Appreciation', 'Merit'];
+
+function toggleCertTypeOther() {
+  const isOther = confirmCertType.value === 'Other';
+  confirmCertTypeOther.classList.toggle('hidden', !isOther);
+  confirmCertTypeOtherHint.classList.toggle('hidden', !isOther);
+}
+
+confirmCertType.addEventListener('change', () => {
+  toggleCertTypeOther();
+  if (confirmCertType.value === 'Other') confirmCertTypeOther.focus();
+});
+
 function populateConfirmScreen() {
   const fields = state.fields || {};
   confirmRollNo.value = state.rollNo;
   confirmName.value = fields['Name'] || '';
-  confirmCertType.value = fields['Certificate Type'] || 'Participation';
+
+  const certType = fields['Certificate Type'] || 'Participation';
+  if (FIXED_CERT_TYPES.includes(certType)) {
+    confirmCertType.value = certType;
+    confirmCertTypeOther.value = '';
+  } else {
+    confirmCertType.value = 'Other';
+    confirmCertTypeOther.value = certType;
+  }
+  toggleCertTypeOther();
+
   confirmPositionRank.value = fields['Position/Rank'] || '';
   confirmEvent.value = fields['Event/Course/Activity'] || '';
   confirmIssuingBody.value = fields['Issuing Body'] || '';
@@ -212,20 +239,26 @@ submitBtn.addEventListener('click', () => {
 });
 
 async function submitCertificate() {
+  const certificateType = confirmCertType.value === 'Other'
+    ? confirmCertTypeOther.value.trim()
+    : confirmCertType.value;
+
   const payload = {
     action: 'submit',
     rollNo: confirmRollNo.value.trim(),
     name: confirmName.value.trim(),
-    certificateType: confirmCertType.value,
+    certificateType,
     positionRank: confirmPositionRank.value,
     event: confirmEvent.value.trim(),
     issuingBody: confirmIssuingBody.value.trim(),
     date: confirmDate.value.trim()
   };
 
-  const missing = ['rollNo', 'name', 'event', 'issuingBody', 'date'].filter((key) => !payload[key]);
+  const missing = ['rollNo', 'name', 'certificateType', 'event', 'issuingBody', 'date'].filter((key) => !payload[key]);
   if (missing.length) {
-    throw new Error('Please fill in all fields before submitting.');
+    throw new Error(missing.includes('certificateType')
+      ? 'Please describe the certificate type (you selected "Other").'
+      : 'Please fill in all fields before submitting.');
   }
 
   submitBtn.disabled = true;

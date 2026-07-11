@@ -26,7 +26,7 @@ body {
   padding: 24px 20px 48px;
 }
 
-.screen.hidden { display: none; }
+.hidden { display: none; }
 
 h1 {
   font-size: 1.4rem;
