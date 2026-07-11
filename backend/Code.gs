@@ -38,9 +38,10 @@
  *   SHEET_ID        - ID of the target Google Sheet (from its URL)
  *   DRIVE_FOLDER_ID - ID of the target Drive folder (from its URL)
  *   GEMINI_API_KEY  - API key from aistudio.google.com
- *   GEMINI_MODEL    - optional; defaults to 'gemini-2.0-flash' if unset (see
- *                      GEMINI_MODEL_DEFAULT below — override here if Google
- *                      renames/retires that model on their free tier)
+ *   GEMINI_MODEL    - optional; defaults to 'gemini-2.5-flash-lite' if unset
+ *                      (see GEMINI_MODEL_DEFAULT below — override here if
+ *                      Google renames/retires that model on their free tier,
+ *                      as happened to gemini-2.0-flash mid-2026)
  * The extraction prompt itself lives in GeminiPrompt.gs, kept separate so it
  * can be tuned without touching request-handling logic. It must be kept in
  * sync with prompts/gemini-extraction-prompt.js (the reviewable draft copy)
@@ -57,7 +58,7 @@ var HEADERS = [
 
 var ALLOWED_CERT_TYPES = ['Participation', 'Appreciation', 'Position'];
 var ALLOWED_POSITIONS = ['', 'Winner', 'Runner-up', '1st Position', '2nd Position', '3rd Position'];
-var GEMINI_MODEL_DEFAULT = 'gemini-2.0-flash';
+var GEMINI_MODEL_DEFAULT = 'gemini-2.5-flash-lite'; // gemini-2.0-flash was deprecated/retired mid-2026
 
 function doPost(e) {
   try {
