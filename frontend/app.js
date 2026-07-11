@@ -33,6 +33,7 @@ const cameraInput = document.getElementById('cameraInput');
 const fileInput = document.getElementById('fileInput');
 
 const previewArea = document.getElementById('previewArea');
+const confirmPreviewArea = document.getElementById('confirmPreviewArea');
 const retakeBtn = document.getElementById('retakeBtn');
 const proceedBtn = document.getElementById('proceedBtn');
 
@@ -85,17 +86,19 @@ function handleFileSelected(file) {
   // reset inputs so selecting the same file again still fires 'change'
   cameraInput.value = '';
   fileInput.value = '';
-  renderPreview(file);
+  renderPreview(file, previewArea);
   showScreen('preview');
 }
 
-// ---- Preview screen ----
-async function renderPreview(file) {
-  previewArea.innerHTML = '';
+// ---- Preview rendering (used on both the Preview screen and, so students
+// can visually cross-check fields like Name/Event while editing, the
+// Confirm screen) ----
+async function renderPreview(file, container) {
+  container.innerHTML = '';
   if (state.fileType === 'image') {
     const img = document.createElement('img');
     img.src = URL.createObjectURL(file);
-    previewArea.appendChild(img);
+    container.appendChild(img);
     return;
   }
   // PDF: render page 1 to a canvas so the student can visually check it too
@@ -108,12 +111,12 @@ async function renderPreview(file) {
     canvas.width = viewport.width;
     canvas.height = viewport.height;
     await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
-    previewArea.appendChild(canvas);
+    container.appendChild(canvas);
   } catch (err) {
     const placeholder = document.createElement('div');
     placeholder.className = 'pdf-placeholder';
     placeholder.textContent = 'PDF selected: ' + file.name;
-    previewArea.appendChild(placeholder);
+    container.appendChild(placeholder);
   }
 }
 
@@ -151,6 +154,7 @@ async function runPipeline() {
   state.fields = await callStructureApi(rawText);
 
   populateConfirmScreen();
+  await renderPreview(state.file, confirmPreviewArea);
   showScreen('confirm');
 }
 

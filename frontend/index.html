@@ -55,40 +55,48 @@
     <h1>Confirm details</h1>
     <p class="hint">Check every field against the certificate — OCR and AI extraction can misread text.</p>
 
-    <label for="confirmRollNo">Roll No.</label>
-    <input id="confirmRollNo" type="text">
+    <div class="confirm-layout">
+      <div id="confirmPreviewArea" class="preview-area confirm-preview"></div>
 
-    <label for="confirmName">Name</label>
-    <input id="confirmName" type="text">
+      <div class="confirm-fields">
+        <label for="confirmRollNo">Roll No.</label>
+        <input id="confirmRollNo" type="text">
 
-    <label for="confirmCertType">Certificate Type</label>
-    <select id="confirmCertType">
-      <option value="Participation">Participation</option>
-      <option value="Appreciation">Appreciation</option>
-      <option value="Merit">Merit</option>
-      <option value="Other">Other</option>
-    </select>
-    <input id="confirmCertTypeOther" type="text" class="hidden" placeholder="e.g. Excellence, Completion, Recognition">
-    <p class="hint hidden" id="confirmCertTypeOtherHint">What follows "Certificate of ___" on the certificate.</p>
+        <label for="confirmName">Name</label>
+        <input id="confirmName" type="text">
+        <p class="hint-warning">Handwritten or decorative-font names are the most likely to be misread — check this against the certificate.</p>
 
-    <label for="confirmPositionRank">Position/Rank</label>
-    <select id="confirmPositionRank">
-      <option value="">(none)</option>
-      <option value="Winner">Winner</option>
-      <option value="Runner-up">Runner-up</option>
-      <option value="1st Position">1st Position</option>
-      <option value="2nd Position">2nd Position</option>
-      <option value="3rd Position">3rd Position</option>
-    </select>
+        <label for="confirmCertType">Certificate Type</label>
+        <select id="confirmCertType">
+          <option value="Participation">Participation</option>
+          <option value="Appreciation">Appreciation</option>
+          <option value="Merit">Merit</option>
+          <option value="Other">Other</option>
+        </select>
+        <input id="confirmCertTypeOther" type="text" class="hidden" placeholder="e.g. Excellence, Completion, Recognition">
+        <p class="hint hidden" id="confirmCertTypeOtherHint">What follows "Certificate of ___" on the certificate.</p>
 
-    <label for="confirmEvent">Event/Course/Activity</label>
-    <input id="confirmEvent" type="text">
+        <label for="confirmPositionRank">Position/Rank</label>
+        <select id="confirmPositionRank">
+          <option value="">(none)</option>
+          <option value="Winner">Winner</option>
+          <option value="Runner-up">Runner-up</option>
+          <option value="1st Position">1st Position</option>
+          <option value="2nd Position">2nd Position</option>
+          <option value="3rd Position">3rd Position</option>
+        </select>
 
-    <label for="confirmIssuingBody">Issuing Body</label>
-    <input id="confirmIssuingBody" type="text">
+        <label for="confirmEvent">Event/Course/Activity</label>
+        <input id="confirmEvent" type="text">
+        <p class="hint-warning">Also easy to misread in stylized fonts — double-check this one too.</p>
 
-    <label for="confirmDate">Date</label>
-    <input id="confirmDate" type="text" placeholder="e.g. 15 Mar 2026 or Mar 2026">
+        <label for="confirmIssuingBody">Issuing Body</label>
+        <input id="confirmIssuingBody" type="text">
+
+        <label for="confirmDate">Date</label>
+        <input id="confirmDate" type="text" placeholder="e.g. 15 Mar 2026 or Mar 2026">
+      </div>
+    </div>
 
     <p id="confirmError" class="error hidden"></p>
 
