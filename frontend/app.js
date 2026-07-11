@@ -93,31 +93,45 @@ function handleFileSelected(file) {
 // ---- Preview rendering (used on both the Preview screen and, so students
 // can visually cross-check fields like Name/Event while editing, the
 // Confirm screen) ----
-async function renderPreview(file, container) {
+//
+// PDFs are shown via the browser's own native PDF viewer in an iframe
+// (blob: URL), not pdf.js canvas rendering. pdf.js's page.render() proved
+// unreliable here: it needs a same-origin worker (the CDN-hosted worker
+// triggers cross-origin Worker issues in some browsers) and, even after
+// working around that, the render() call itself could hang indefinitely.
+// The native viewer sidesteps all of that, and as a bonus supports
+// scrolling multi-page certificates and the browser's own zoom controls.
+// pdf.js is still used for text extraction (extractPdfText), which doesn't
+// touch rendering and has been reliable.
+let lastPreviewObjectUrl = null;
+
+function renderPreview(file, container) {
   container.innerHTML = '';
+  if (lastPreviewObjectUrl) {
+    URL.revokeObjectURL(lastPreviewObjectUrl);
+  }
+  const objectUrl = URL.createObjectURL(file);
+  lastPreviewObjectUrl = objectUrl;
+
   if (state.fileType === 'image') {
     const img = document.createElement('img');
-    img.src = URL.createObjectURL(file);
+    img.src = objectUrl;
     container.appendChild(img);
-    return;
+  } else {
+    const iframe = document.createElement('iframe');
+    iframe.src = objectUrl;
+    iframe.className = 'pdf-frame';
+    iframe.title = 'Certificate preview';
+    container.appendChild(iframe);
   }
-  // PDF: render page 1 to a canvas so the student can visually check it too
-  try {
-    const arrayBuffer = await file.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-    const page = await pdf.getPage(1);
-    const viewport = page.getViewport({ scale: 1.2 });
-    const canvas = document.createElement('canvas');
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
-    await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
-    container.appendChild(canvas);
-  } catch (err) {
-    const placeholder = document.createElement('div');
-    placeholder.className = 'pdf-placeholder';
-    placeholder.textContent = 'PDF selected: ' + file.name;
-    container.appendChild(placeholder);
-  }
+
+  const fullSizeLink = document.createElement('a');
+  fullSizeLink.href = objectUrl;
+  fullSizeLink.target = '_blank';
+  fullSizeLink.rel = 'noopener';
+  fullSizeLink.className = 'view-full-size';
+  fullSizeLink.textContent = 'View full size ↗';
+  container.appendChild(fullSizeLink);
 }
 
 retakeBtn.addEventListener('click', () => {
