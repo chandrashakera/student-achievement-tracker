@@ -1,21 +1,20 @@
 :root {
-  color-scheme: dark;
-  --bg: #0f172a;
-  --surface: #1e293b;
-  --text: #e2e8f0;
-  --muted: #94a3b8;
+  color-scheme: light;
+  --bg: #ffffff;
+  --surface: #f1f5f9;
+  --text: #1e293b;
+  --muted: #64748b;
   /* Brand colors lifted from chandrashaker.in (blue #1565c0 headings,
-     orange #ff8f00 nav accent), re-tuned for contrast on this app's dark
-     background rather than the site's white one. Blue drives everyday
-     navigation actions; orange is reserved for the final Submit action
-     and heading accents, so it stays a highlight rather than the norm. */
-  --accent: #3b82f6;
-  --accent-text: #f8fafc;
+     orange #ff8f00 nav accent). Blue drives everyday navigation actions;
+     orange is reserved for the final Submit action and heading accents,
+     so it stays a highlight rather than the norm. */
+  --accent: #1565c0;
+  --accent-text: #ffffff;
   --highlight: #ff8f00;
   --highlight-text: #1c1300;
-  --danger: #f87171;
-  --warning: #fbbf24;
-  --border: #334155;
+  --danger: #dc2626;
+  --warning: #b45309;
+  --border: #d1d5db;
 }
 
 * { box-sizing: border-box; }
