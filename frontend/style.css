@@ -4,8 +4,15 @@
   --surface: #1e293b;
   --text: #e2e8f0;
   --muted: #94a3b8;
-  --accent: #38bdf8;
-  --accent-text: #04141f;
+  /* Brand colors lifted from chandrashaker.in (blue #1565c0 headings,
+     orange #ff8f00 nav accent), re-tuned for contrast on this app's dark
+     background rather than the site's white one. Blue drives everyday
+     navigation actions; orange is reserved for the final Submit action
+     and heading accents, so it stays a highlight rather than the norm. */
+  --accent: #3b82f6;
+  --accent-text: #f8fafc;
+  --highlight: #ff8f00;
+  --highlight-text: #1c1300;
   --danger: #f87171;
   --warning: #fbbf24;
   --border: #334155;
@@ -30,8 +37,11 @@ body {
 .hidden { display: none; }
 
 h1 {
+  display: inline-block;
   font-size: 1.4rem;
   margin: 0 0 8px;
+  padding-bottom: 6px;
+  border-bottom: 3px solid var(--highlight);
 }
 
 .hint {
@@ -97,6 +107,14 @@ button.secondary {
   background: transparent;
   color: var(--text);
   border: 1px solid var(--border);
+}
+
+/* The final commit action gets the brand's orange highlight instead of
+   the everyday navigation blue, so it visually stands apart as "this is
+   the one that actually submits your data." */
+#submitBtn {
+  background: var(--highlight);
+  color: var(--highlight-text);
 }
 
 .preview-area {
