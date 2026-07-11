@@ -7,6 +7,7 @@
   --accent: #38bdf8;
   --accent-text: #04141f;
   --danger: #f87171;
+  --warning: #fbbf24;
   --border: #334155;
 }
 
@@ -142,6 +143,55 @@ button.secondary {
   color: var(--danger);
   font-size: 0.9rem;
   margin-top: 12px;
+}
+
+.hint-warning {
+  color: var(--warning);
+  font-size: 0.8rem;
+  margin: 4px 0 0;
+}
+
+/* Confirm screen: certificate preview stacked above the form on mobile,
+   side-by-side on wider viewports so students can visually cross-check
+   fields (esp. Name/Event) against the certificate while editing. */
+.confirm-layout {
+  margin-top: 16px;
+}
+
+.confirm-preview {
+  margin-bottom: 20px;
+  max-height: 40vh;
+}
+
+.confirm-preview img, .confirm-preview canvas {
+  max-height: 38vh;
+}
+
+@media (min-width: 700px) {
+  #app { max-width: 900px; }
+
+  .confirm-layout {
+    display: flex;
+    align-items: flex-start;
+    gap: 24px;
+  }
+
+  .confirm-preview {
+    flex: 0 0 42%;
+    margin-bottom: 0;
+    max-height: none;
+    position: sticky;
+    top: 16px;
+  }
+
+  .confirm-preview img, .confirm-preview canvas {
+    max-height: 75vh;
+  }
+
+  .confirm-fields {
+    flex: 1;
+    min-width: 0;
+  }
 }
 
 #doneFileLink {
