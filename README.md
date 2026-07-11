@@ -42,7 +42,12 @@ prompts/    Gemini extraction prompt, reviewable draft copy (see backend/GeminiP
 | Roll No. | Name | Certificate Type | Position/Rank | Event/Course/Activity | Issuing Body | Date | File Link | Timestamp |
 |---|---|---|---|---|---|---|---|---|
 
-`Certificate Type` ∈ {Participation, Appreciation, Position}.
+`Certificate Type` has three fixed categories — Participation, Appreciation,
+Merit — plus a free-text "Other" case: whatever short phrase follows
+"Certificate of ___" on the certificate (e.g. "Completion", "Excellence"),
+stored directly as the cell value rather than the literal word "Other".
+Not validated against an enum server-side, since arbitrary text is valid.
+
 `Position/Rank` ∈ {"", Winner, Runner-up, 1st Position, 2nd Position, 3rd Position} —
 left blank unless explicitly stated on the certificate; never inferred from
 Certificate Type.
@@ -260,8 +265,7 @@ Expected response (values will vary with the exact text):
 Try a payload whose text includes an explicit rank (e.g. "...awarded 1st
 Position to...") and confirm `Position/Rank` only gets filled when the rank
 is stated verbatim — and stays `""` for plain participation text even though
-its `Certificate Type` may still come back as something other than
-"Position".
+its `Certificate Type` may still come back as "Merit".
 
 ## Running the frontend locally
 
