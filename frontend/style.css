@@ -255,14 +255,14 @@ button.secondary {
   text-align: center;
   padding: 12px 16px;
   border-radius: 10px;
-  border: 1px solid var(--border);
-  color: var(--text);
+  border: none;
+  background: var(--accent);
+  color: var(--accent-text);
   font-size: 0.9rem;
   font-weight: 600;
   text-decoration: none;
 }
 
 .done-nav a:hover {
-  border-color: var(--accent);
-  color: var(--accent);
+  opacity: 0.9;
 }
