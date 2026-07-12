@@ -11,12 +11,16 @@ Full spec: [claude_code_build_brief.md](claude_code_build_brief.md)
 
 - **Phase 1 — backend: deployed and confirmed working** (row + file landed
   correctly in testing). See [backend/](backend/).
-- **Phase 2 — frontend: built, not yet deployed to GitHub Pages/Vercel.**
-  PWA (scan/upload → OCR → Gemini → confirm → submit) lives in
+- **Phase 2 — frontend: deployed and confirmed working end-to-end**,
+  including a real device test (camera capture, OCR, Gemini structuring,
+  submit). PWA (scan/upload → OCR → Gemini → confirm → submit) lives in
   [frontend/](frontend/). The backend was extended with a `structure` action
   that proxies Gemini calls so the API key never reaches the browser — see
-  "Redeploying the backend for Phase 2" below, **required before the app can
-  structure certificates.**
+  "Redeploying the backend for Phase 2" below if you're setting this up
+  fresh elsewhere.
+- **Live at [a.chandrashaker.in](https://a.chandrashaker.in)**, deployed via
+  Cloudflare Pages (repo: [chandrashakera/student-achievement-tracker](https://github.com/chandrashakera/student-achievement-tracker),
+  branch `main`, build output directory `frontend`).
 
 ## Repo layout
 
