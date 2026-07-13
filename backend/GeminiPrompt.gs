@@ -58,7 +58,8 @@ var GEMINI_EXTRACTION_RULES =
   'General rules:\n' +
   '- Every value must be a plain string (use "" for unknown/missing, never null, never omit a key).\n' +
   '- Do not add any keys beyond the six listed above.\n' +
-  '- Do not wrap the JSON in markdown code fences (no ```json).\n';
+  '- Do not wrap the JSON in markdown code fences (no ```json).\n' +
+  '- CRITICAL: if what was provided does not actually appear to be a real, legible certificate — e.g. it is blank, corrupted, unrelated content, or too illegible to make out any genuine details — return empty strings "" for ALL SIX fields. Do NOT invent or guess plausible-sounding names, institutions, events, or dates just to produce a fuller-looking answer. A response of all empty strings is correct and expected when there is truly nothing legible to extract — it is far better than a fabricated one.\n';
 
 var GEMINI_EXTRACTION_PROMPT_TEXT = 'You are extracting structured data from the raw text of a scanned student certificate (participation, appreciation, merit, or achievement certificate, or a course completion certificate). The text below was produced by OCR or PDF text extraction and may contain noise, misspellings, broken line breaks, or garbled characters — read past that noise to the underlying certificate content.\n\n' +
   GEMINI_EXTRACTION_RULES +
