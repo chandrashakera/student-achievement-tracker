@@ -9,6 +9,7 @@
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icons/icon.svg">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.css">
 </head>
 <body>
 
@@ -26,6 +27,7 @@
       <button id="scanBtn" type="button" disabled>Scan Certificate</button>
       <button id="uploadBtn" type="button" disabled>Upload Certificate</button>
     </div>
+    <p class="hint" style="margin-top: 10px;">Tip: good lighting, hold steady, and fill the frame with the certificate for the most accurate reading.</p>
 
     <input id="cameraInput" type="file" accept="image/*" capture="environment" hidden>
     <input id="fileInput" type="file" accept="image/*,application/pdf" hidden>
@@ -34,6 +36,7 @@
   <!-- Screen 2: Preview -->
   <section id="screen-preview" class="screen hidden">
     <h1>Review your capture</h1>
+    <p id="cropHint" class="hint hidden">Drag the corners so the box covers just the certificate — this helps the AI read it more accurately.</p>
     <div id="previewArea" class="preview-area"></div>
     <div class="button-row">
       <button id="retakeBtn" type="button" class="secondary">Retake</button>
@@ -121,7 +124,7 @@
 
 </main>
 
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js"></script>
 <script src="config.js"></script>
 <script type="module" src="app.js"></script>
 </body>

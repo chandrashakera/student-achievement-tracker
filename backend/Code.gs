@@ -27,7 +27,12 @@
  *        or { "success": false, "error": "..." }
  *
  * ---- structure — wire format (POST body, JSON) ----
- * { "action": "structure", "text": "<raw OCR/PDF text>" }
+ * Either (PDFs — pdf.js already extracted reliable digital text client-side):
+ *   { "action": "structure", "text": "<raw PDF text>" }
+ * Or (images — sent directly to Gemini's vision input, no client-side OCR;
+ * Gemini reads handwriting/decorative fonts far more reliably than
+ * Tesseract.js, which is why images skip OCR entirely):
+ *   { "action": "structure", "imageBase64": "<base64, no data: prefix>", "mimeType": "image/jpeg" }
  * Response: { "success": true, "fields": { "Name": "...", "Certificate Type": "...",
  *             "Position/Rank": "...", "Event/Course/Activity": "...",
  *             "Issuing Body": "...", "Date": "..." } }
@@ -100,10 +105,16 @@ function handleSubmitRequest_(body) {
 }
 
 function handleStructureRequest_(body) {
-  if (!body.text || !String(body.text).trim()) {
-    throw new Error('Missing required field: text');
+  if (body.imageBase64) {
+    if (!body.mimeType) {
+      throw new Error('Missing required field: mimeType');
+    }
+    return callGeminiForStructuring_({ imageBase64: String(body.imageBase64), mimeType: String(body.mimeType) });
   }
-  return callGeminiForStructuring_(String(body.text));
+  if (!body.text || !String(body.text).trim()) {
+    throw new Error('Missing required field: text (or imageBase64+mimeType)');
+  }
+  return callGeminiForStructuring_({ text: String(body.text) });
 }
 
 // Lets you sanity-check the deployment URL in a browser (GET request).
@@ -181,20 +192,31 @@ function getRequiredProperty_(key) {
   return value;
 }
 
-// Calls Gemini with the extraction prompt (GeminiPrompt.gs) and the raw OCR
-// text, and returns a sanitized fields object ready for the confirmation
-// screen. Never throws on a malformed/out-of-vocabulary Certificate Type or
-// Position/Rank — it clamps those to safe defaults instead, since the
-// confirmation screen is the actual data-integrity safeguard and the
-// student can correct anything here.
-function callGeminiForStructuring_(rawText) {
+// Calls Gemini with the extraction prompt (GeminiPrompt.gs) and either raw
+// PDF text or a certificate image, and returns a sanitized fields object
+// ready for the confirmation screen. Never throws on a malformed/
+// out-of-vocabulary Certificate Type or Position/Rank — it clamps those to
+// safe defaults instead, since the confirmation screen is the actual
+// data-integrity safeguard and the student can correct anything here.
+//
+// input is { text } for PDFs or { imageBase64, mimeType } for images.
+function callGeminiForStructuring_(input) {
   var apiKey = getRequiredProperty_('GEMINI_API_KEY');
   var model = PropertiesService.getScriptProperties().getProperty('GEMINI_MODEL') || GEMINI_MODEL_DEFAULT;
   var url = 'https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + encodeURIComponent(apiKey);
 
-  var prompt = GEMINI_EXTRACTION_PROMPT.replace('{{OCR_TEXT}}', rawText);
+  var parts;
+  if (input.imageBase64) {
+    parts = [
+      { text: GEMINI_EXTRACTION_PROMPT_IMAGE },
+      { inlineData: { mimeType: input.mimeType, data: input.imageBase64 } }
+    ];
+  } else {
+    parts = [{ text: GEMINI_EXTRACTION_PROMPT_TEXT.replace('{{OCR_TEXT}}', input.text) }];
+  }
+
   var payload = {
-    contents: [{ parts: [{ text: prompt }] }],
+    contents: [{ parts: parts }],
     generationConfig: { responseMimeType: 'application/json' }
   };
 
