@@ -34,6 +34,7 @@ const fileInput = document.getElementById('fileInput');
 
 const previewArea = document.getElementById('previewArea');
 const confirmPreviewArea = document.getElementById('confirmPreviewArea');
+const cropHint = document.getElementById('cropHint');
 const retakeBtn = document.getElementById('retakeBtn');
 const proceedBtn = document.getElementById('proceedBtn');
 
@@ -86,7 +87,8 @@ function handleFileSelected(file) {
   // reset inputs so selecting the same file again still fires 'change'
   cameraInput.value = '';
   fileInput.value = '';
-  renderPreview(file, previewArea);
+  cropHint.classList.toggle('hidden', state.fileType !== 'image');
+  renderPreview(file, previewArea, state.fileType === 'image');
   showScreen('preview');
 }
 
@@ -104,9 +106,21 @@ function handleFileSelected(file) {
 // pdf.js is still used for text extraction (extractPdfText), which doesn't
 // touch rendering and has been reliable.
 let lastPreviewObjectUrl = null;
+let activeCropper = null;
 
-function renderPreview(file, container) {
+function destroyActiveCropper() {
+  if (activeCropper) {
+    activeCropper.destroy();
+    activeCropper = null;
+  }
+}
+
+// enableCrop is only true for the Preview screen's own image (so the
+// student can crop tighter to the certificate before it's sent for
+// reading) -- the Confirm screen just displays the original file plainly.
+function renderPreview(file, container, enableCrop) {
   container.innerHTML = '';
+  destroyActiveCropper();
   if (lastPreviewObjectUrl) {
     URL.revokeObjectURL(lastPreviewObjectUrl);
   }
@@ -117,6 +131,20 @@ function renderPreview(file, container) {
     const img = document.createElement('img');
     img.src = objectUrl;
     container.appendChild(img);
+    if (enableCrop) {
+      img.addEventListener('load', () => {
+        activeCropper = new Cropper(img, {
+          viewMode: 1,
+          autoCropArea: 1,
+          background: false,
+          movable: false,
+          rotatable: false,
+          scalable: false,
+          zoomable: true,
+          responsive: true
+        });
+      });
+    }
   } else {
     const iframe = document.createElement('iframe');
     iframe.src = objectUrl;
@@ -134,7 +162,27 @@ function renderPreview(file, container) {
   container.appendChild(fullSizeLink);
 }
 
+// Returns the cropped region as a Blob for sending to Gemini. Falls back to
+// the original file if cropping wasn't available for some reason (e.g. a
+// very small/odd image Cropper.js couldn't initialize on) -- the crop is an
+// accuracy aid, not a hard requirement.
+function getCroppedImageBlob() {
+  return new Promise((resolve) => {
+    if (!activeCropper) {
+      resolve(state.file);
+      return;
+    }
+    const canvas = activeCropper.getCroppedCanvas({ maxWidth: 2000, maxHeight: 2000 });
+    if (!canvas) {
+      resolve(state.file);
+      return;
+    }
+    canvas.toBlob((blob) => resolve(blob || state.file), 'image/jpeg', 0.92);
+  });
+}
+
 retakeBtn.addEventListener('click', () => {
+  destroyActiveCropper();
   state.file = null;
   state.fileType = null;
   showScreen('home');
@@ -154,21 +202,28 @@ proceedBtn.addEventListener('click', () => {
 
 processingBackBtn.addEventListener('click', () => showScreen('preview'));
 
-// ---- Processing pipeline: extract text -> Gemini structuring -> confirm screen ----
+// ---- Processing pipeline: PDF -> pdf.js text -> Gemini; image -> straight
+// to Gemini's vision input (no client-side OCR step) -> confirm screen.
+//
+// Images skip Tesseract.js entirely and go straight to Gemini. Tesseract is
+// a printed-text engine and was misreading handwritten/decorative-font
+// names and event titles; Gemini's vision reads those far more reliably,
+// and as a bonus this also removes the multi-second local OCR wait.
 async function runPipeline() {
-  processingStatus.textContent = state.fileType === 'pdf'
-    ? 'Extracting text from PDF...'
-    : 'Reading certificate (this can take a few seconds)...';
-
-  const rawText = state.fileType === 'pdf'
-    ? await extractPdfText(state.file)
-    : await runOcr(state.file);
-
-  processingStatus.textContent = 'Structuring data with AI...';
-  state.fields = await callStructureApi(rawText);
+  if (state.fileType === 'pdf') {
+    processingStatus.textContent = 'Extracting text from PDF...';
+    const rawText = await extractPdfText(state.file);
+    processingStatus.textContent = 'Structuring data with AI...';
+    state.fields = await callStructureApi({ text: rawText });
+  } else {
+    processingStatus.textContent = 'Reading certificate with AI (this can take a few seconds)...';
+    const croppedBlob = await getCroppedImageBlob();
+    const imageBase64 = await blobToBase64(croppedBlob);
+    state.fields = await callStructureApi({ imageBase64, mimeType: croppedBlob.type || 'image/jpeg' });
+  }
 
   populateConfirmScreen();
-  await renderPreview(state.file, confirmPreviewArea);
+  await renderPreview(state.file, confirmPreviewArea, false);
   showScreen('confirm');
 }
 
@@ -184,21 +239,11 @@ async function extractPdfText(file) {
   return text;
 }
 
-function runOcr(file) {
-  return Tesseract.recognize(file, 'eng', {
-    logger: (m) => {
-      if (m.status === 'recognizing text' && typeof m.progress === 'number') {
-        processingStatus.textContent = 'Reading certificate... ' + Math.round(m.progress * 100) + '%';
-      }
-    }
-  }).then((result) => result.data.text);
-}
-
-async function callStructureApi(text) {
+async function callStructureApi(input) {
   const response = await fetch(CONFIG.WEBAPP_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // avoids CORS preflight
-    body: JSON.stringify({ action: 'structure', text })
+    body: JSON.stringify(Object.assign({ action: 'structure' }, input))
   });
   const result = await response.json();
   if (!result.success) {
@@ -282,7 +327,7 @@ async function submitCertificate() {
   submitBtn.disabled = true;
   submitBtn.textContent = 'Submitting...';
 
-  const base64 = await fileToBase64(state.file);
+  const base64 = await blobToBase64(state.file);
   payload.fileName = state.file.name || ('capture_' + Date.now() + (state.fileType === 'pdf' ? '.pdf' : '.jpg'));
   payload.mimeType = state.file.type || (state.fileType === 'pdf' ? 'application/pdf' : 'image/jpeg');
   payload.fileBase64 = base64;
@@ -306,12 +351,13 @@ async function submitCertificate() {
   showScreen('done');
 }
 
-function fileToBase64(file) {
+// Works for both File and Blob (a cropped canvas produces a plain Blob).
+function blobToBase64(blob) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result.split(',')[1]);
     reader.onerror = () => reject(new Error('Could not read the file.'));
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(blob);
   });
 }
 

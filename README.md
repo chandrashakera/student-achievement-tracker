@@ -1,9 +1,10 @@
 # Student Achievement Tracker
 
 Zero-cost PWA for a college department to collect student certificate/achievement
-data each semester. Students scan or upload a certificate, OCR + Gemini extract
-the fields, the student confirms/corrects them, and the record lands in a
-Google Sheet with the file saved to Drive.
+data each semester. Students scan or upload a certificate, Gemini extracts
+the fields (directly from the image for photos, or from pdf.js-extracted
+text for PDFs), the student confirms/corrects them, and the record lands in
+a Google Sheet with the file saved to Drive.
 
 Full spec: [claude_code_build_brief.md](claude_code_build_brief.md)
 
@@ -33,8 +34,14 @@ prompts/    Gemini extraction prompt, reviewable draft copy (see backend/GeminiP
 ## Stack
 
 - Frontend: plain HTML/JS/CSS PWA, installable via "Add to Home Screen"
-- Hosting: GitHub Pages or Vercel (free tier)
-- PDF text: pdf.js (client-side) | Image OCR: Tesseract.js (client-side)
+- Hosting: Cloudflare Pages (free tier), live at a.chandrashaker.in
+- PDF text: pdf.js (client-side). Images: sent directly to Gemini's vision
+  input — no client-side OCR. (Originally used Tesseract.js for images, but
+  it's a printed-text engine and misread handwritten/decorative-font names
+  and event titles; Gemini's vision is far more reliable for that and also
+  removes the multi-second local OCR wait.) A manual crop step (Cropper.js)
+  on the Preview screen lets students tighten the frame to just the
+  certificate before it's sent, for a bit more accuracy.
 - Field structuring: Gemini free-tier API
 - Backend: Google Apps Script Web App (free, no server)
 - Storage: Google Sheets (live database) + Google Drive (file storage)
@@ -84,10 +91,17 @@ Response: `{ "success": true, "fileUrl": "https://drive.google.com/file/d/.../vi
 or on error: `{ "success": false, "error": "..." }`
 
 **`action: "structure"`** (Phase 2, proxies Gemini so the API key stays
-server-side):
+server-side). Either, for PDFs (pdf.js already extracted reliable digital
+text client-side):
 
 ```json
-{ "action": "structure", "text": "<raw OCR/PDF text>" }
+{ "action": "structure", "text": "<raw PDF text>" }
+```
+
+Or, for images (sent directly to Gemini's vision input, no OCR step):
+
+```json
+{ "action": "structure", "imageBase64": "<base64, no data: prefix>", "mimeType": "image/jpeg" }
 ```
 
 Response: `{ "success": true, "fields": { "Name": "...", "Certificate Type": "...", "Position/Rank": "...", "Event/Course/Activity": "...", "Issuing Body": "...", "Date": "..." } }`
@@ -219,9 +233,11 @@ worrying about POST payloads.
 
 ## Gemini extraction prompt
 
-The prompt Gemini uses to turn raw OCR/PDF text into structured JSON is
-drafted in [prompts/gemini-extraction-prompt.js](prompts/gemini-extraction-prompt.js)
-for review/tuning. The version that actually executes is
+The prompts Gemini uses to turn a PDF's extracted text, or a certificate
+image, into structured JSON are drafted in
+[prompts/gemini-extraction-prompt.js](prompts/gemini-extraction-prompt.js)
+for review/tuning (two variants sharing the same field rules — one for text,
+one for images). The version that actually executes is
 [backend/GeminiPrompt.gs](backend/GeminiPrompt.gs) — Apps Script can't
 import the `.js` file directly, so if you tune the wording, edit
 `GeminiPrompt.gs` and port the same change into the `.js` copy so they don't
@@ -245,13 +261,15 @@ Your Phase 1 deployment already works for submissions, but the new
    | Property | Value |
    |---|---|
    | `GEMINI_API_KEY` | the key from step 3 |
-   | `GEMINI_MODEL` | optional — only set this if you need to override the default. `Code.gs` currently defaults to `gemini-2.0-flash`; check aistudio.google.com for the current free-tier model name in case Google has renamed/retired it since this was written. |
+   | `GEMINI_MODEL` | optional — only set this if you need to override the default. `Code.gs` currently defaults to `gemini-3.1-flash-lite`; free-tier model availability changes often, so if extraction starts failing, check `https://generativelanguage.googleapis.com/v1beta/models?key=YOUR_KEY` and `https://aistudio.google.com/rate-limit` for what's actually live and quota'd for your account before assuming the code is broken. |
 
 5. Deploy > Manage deployments > pencil icon > Version: **New version** >
    Deploy. The `/exec` URL stays the same, so the frontend config doesn't
    need to change.
 
 ### Testing the `structure` action standalone
+
+Text variant (what PDFs use):
 
 ```bash
 curl -X POST \
@@ -270,6 +288,16 @@ Try a payload whose text includes an explicit rank (e.g. "...awarded 1st
 Position to...") and confirm `Position/Rank` only gets filled when the rank
 is stated verbatim — and stays `""` for plain participation text even though
 its `Certificate Type` may still come back as "Merit".
+
+Image variant (what photos/uploads use — no OCR, sent straight to Gemini):
+
+```bash
+base64 -w0 test-certificate.jpg > /tmp/cert_b64.txt   # macOS: base64 -i test-certificate.jpg
+curl -X POST \
+  -H "Content-Type: text/plain;charset=utf-8" \
+  -d "{\"action\":\"structure\",\"mimeType\":\"image/jpeg\",\"imageBase64\":\"$(cat /tmp/cert_b64.txt)\"}" \
+  "https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec"
+```
 
 ## Running the frontend locally
 
