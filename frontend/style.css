@@ -266,3 +266,17 @@ button.secondary {
 .done-nav a:hover {
   opacity: 0.9;
 }
+
+.privacy-link {
+  display: block;
+  text-align: center;
+  margin-top: 14px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-decoration: none;
+}
+
+.privacy-link:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
