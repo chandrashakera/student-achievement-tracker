@@ -28,11 +28,12 @@
 
 const GEMINI_EXTRACTION_RULES = `Return ONLY a single JSON object. No markdown code fences, no explanation, no leading or trailing text — just the raw JSON object, parseable by JSON.parse().
 
-The JSON object must have exactly these six keys, matching these exact names:
+The JSON object must have exactly these seven keys, matching these exact names:
 
 {
   "Name": string,
   "Certificate Type": string,
+  "Certificate Category": string,
   "Position/Rank": string,
   "Event/Course/Activity": string,
   "Issuing Body": string,
@@ -50,17 +51,24 @@ Field-by-field rules:
    - If it genuinely does not fit any of the three above (e.g. "Certificate of Completion", "Certificate of Excellence", "Certificate of Recognition", "Internship Certificate"), do NOT force it into one of them. Instead return the certificate's own short descriptive type exactly as it would follow "Certificate of ___" — e.g. "Completion", "Excellence", "Recognition", "Internship". Keep it short (a few words), Title Case, and do not include the leading words "Certificate of".
    If genuinely ambiguous between Participation/Appreciation/Merit, prefer "Participation" as the default — only use the free-text fallback when none of the three fixed categories fit at all.
 
-3. "Position/Rank" — THIS FIELD HAS A STRICT RULE, follow it exactly:
+3. "Certificate Category" — a BROADER classification, completely INDEPENDENT of "Certificate Type" above (a single certificate can be, for example, both Type "Merit" AND Category "Paper/Poster/Project Presentation" at the same time — these are two separate axes, not related). Choose exactly ONE of these four strings:
+   - "Paper/Poster/Project Presentation": paper or poster presentations, hackathons, project expos, coding/software/hardware challenges, or any similar technical competition or presentation.
+   - "Online Certification/Workshop": certification courses, training programs, or workshops, whether online or offline (e.g. NPTEL/Coursera/Udemy courses, in-person technical workshops).
+   - "Extra-Curricular Activity": sports, non-technical event participation, volunteering, coordinating/organizing any program, cultural celebrations, quizzes (government-run or otherwise), or participation in government initiatives (e.g. Yoga Day, Swachh Bharat drives).
+   - "Other": use ONLY if the certificate genuinely does not fit any of the three descriptions above.
+   If it is a close call between the first three, pick whichever best matches the certificate's primary focus — do not default to "Other" just because you are unsure between two of the three; "Other" is specifically for when none of the three apply.
+
+4. "Position/Rank" — THIS FIELD HAS A STRICT RULE, follow it exactly:
    - Only fill this in if a rank or placing is STATED VERBATIM on the certificate — e.g. it literally contains words like "Winner", "Runner-up", "1st Position", "2nd Position", "3rd Position", "1st Prize", "Second Place", etc.
    - If you fill it in, map what you find to exactly ONE of these five strings: "Winner", "Runner-up", "1st Position", "2nd Position", "3rd Position". Choose the closest match (e.g. "1st Prize" or "First Place" -> "1st Position"; "Champion" -> "Winner"; "2nd Runner-up" -> pick the closest of "Runner-up" or "3rd Position" based on context).
    - DO NOT infer, guess, or default a value here just because you classified "Certificate Type" as "Merit". Classifying the certificate type as "Merit" does NOT by itself justify filling in this field — you still need an explicit, verbatim rank mention.
    - If no explicit rank/placing wording appears, leave this as an empty string "". An empty string is the correct, expected answer most of the time — do not treat it as a failure to find something.
 
-4. "Event/Course/Activity" — the name of the event, competition, workshop, course, or activity the certificate is for (e.g. "National Level Hackathon 2026", "NPTEL Course on Data Structures"). If it truly cannot be found, use an empty string "".
+5. "Event/Course/Activity" — the name of the event, competition, workshop, course, or activity the certificate is for (e.g. "National Level Hackathon 2026", "NPTEL Course on Data Structures"). If it truly cannot be found, use an empty string "".
 
-5. "Issuing Body" — the organization, institution, company, or department that issued the certificate (e.g. college name, company name, professional body). If it truly cannot be found, use an empty string "".
+6. "Issuing Body" — the organization, institution, company, or department that issued the certificate (e.g. college name, company name, professional body). If it truly cannot be found, use an empty string "".
 
-6. "Date" — the date associated with the certificate, following this fallback rule:
+7. "Date" — the date associated with the certificate, following this fallback rule:
    - If an exact date is stated (e.g. "15th March 2026" or "15/03/2026"), return it in a clear, human-readable form, e.g. "15 Mar 2026".
    - If the certificate covers a range or duration (common for courses), and exact start/end dates are given, return the range, e.g. "10 Jan 2026 - 28 Feb 2026".
    - If exact day-level dates are NOT given but a month and year are (e.g. only "March 2026" appears, or the certificate implies a period like a semester), fall back to month-year granularity, e.g. "Mar 2026" or a month-year range like "Jan-Mar 2026".
@@ -69,10 +77,10 @@ Field-by-field rules:
    - Never fabricate a date that isn't supported by the certificate.
 
 General rules:
-- Every value must be a plain string (use "" for unknown/missing, never null, never omit a key).
-- Do not add any keys beyond the six listed above.
+- Every value must be a plain string (use "" for unknown/missing, never null, never omit a key) — except "Certificate Category", which must always be one of its four fixed values, never empty.
+- Do not add any keys beyond the seven listed above.
 - Do not wrap the JSON in markdown code fences (no \`\`\`json).
-- CRITICAL: if what was provided does not actually appear to be a real, legible certificate — e.g. it is blank, corrupted, unrelated content, or too illegible to make out any genuine details — return empty strings "" for ALL SIX fields. Do NOT invent or guess plausible-sounding names, institutions, events, or dates just to produce a fuller-looking answer. A response of all empty strings is correct and expected when there is truly nothing legible to extract — it is far better than a fabricated one.
+- CRITICAL: if what was provided does not actually appear to be a real, legible certificate — e.g. it is blank, corrupted, unrelated content, or too illegible to make out any genuine details — return empty strings "" for every field EXCEPT "Certificate Category" (set that one to "Other" in this case), rather than inventing plausible-sounding names, institutions, events, or dates just to produce a fuller-looking answer. All-empty (plus Category "Other") is correct and expected when there is truly nothing legible to extract — it is far better than a fabricated one.
 `;
 
 const GEMINI_EXTRACTION_PROMPT_TEXT = `You are extracting structured data from the raw text of a scanned student certificate (participation, appreciation, merit, or achievement certificate, or a course completion certificate). The text below was produced by OCR or PDF text extraction and may contain noise, misspellings, broken line breaks, or garbled characters — read past that noise to the underlying certificate content.

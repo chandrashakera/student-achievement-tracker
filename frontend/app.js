@@ -47,6 +47,7 @@ const confirmName = document.getElementById('confirmName');
 const confirmCertType = document.getElementById('confirmCertType');
 const confirmCertTypeOther = document.getElementById('confirmCertTypeOther');
 const confirmCertTypeOtherHint = document.getElementById('confirmCertTypeOtherHint');
+const confirmCertCategory = document.getElementById('confirmCertCategory');
 const confirmPositionRank = document.getElementById('confirmPositionRank');
 const confirmEvent = document.getElementById('confirmEvent');
 const confirmIssuingBody = document.getElementById('confirmIssuingBody');
@@ -257,6 +258,11 @@ async function callStructureApi(input) {
 // the student's own wording) is treated as "Other" with free text.
 const FIXED_CERT_TYPES = ['Participation', 'Appreciation', 'Merit'];
 
+// Certificate Category is a strictly fixed 4-way choice (no free-text case,
+// unlike Certificate Type above) -- must match backend/Code.gs's
+// ALLOWED_CATEGORIES exactly.
+const ALLOWED_CATEGORIES = ['Paper/Poster/Project Presentation', 'Online Certification/Workshop', 'Extra-Curricular Activity', 'Other'];
+
 function toggleCertTypeOther() {
   const isOther = confirmCertType.value === 'Other';
   confirmCertTypeOther.classList.toggle('hidden', !isOther);
@@ -282,6 +288,9 @@ function populateConfirmScreen() {
     confirmCertTypeOther.value = certType;
   }
   toggleCertTypeOther();
+
+  const certCategory = fields['Certificate Category'];
+  confirmCertCategory.value = ALLOWED_CATEGORIES.includes(certCategory) ? certCategory : 'Other';
 
   confirmPositionRank.value = fields['Position/Rank'] || '';
   confirmEvent.value = fields['Event/Course/Activity'] || '';
@@ -311,13 +320,14 @@ async function submitCertificate() {
     rollNo: confirmRollNo.value.trim(),
     name: confirmName.value.trim(),
     certificateType,
+    certificateCategory: confirmCertCategory.value,
     positionRank: confirmPositionRank.value,
     event: confirmEvent.value.trim(),
     issuingBody: confirmIssuingBody.value.trim(),
     date: confirmDate.value.trim()
   };
 
-  const missing = ['rollNo', 'name', 'certificateType', 'event', 'issuingBody', 'date'].filter((key) => !payload[key]);
+  const missing = ['rollNo', 'name', 'certificateType', 'certificateCategory', 'event', 'issuingBody', 'date'].filter((key) => !payload[key]);
   if (missing.length) {
     throw new Error(missing.includes('certificateType')
       ? 'Please describe the certificate type (you selected "Other").'

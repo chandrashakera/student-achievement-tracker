@@ -50,14 +50,25 @@ prompts/    Gemini extraction prompt, reviewable draft copy (see backend/GeminiP
 
 ## Sheet schema (exact column order)
 
-| Roll No. | Name | Certificate Type | Position/Rank | Event/Course/Activity | Issuing Body | Date | File Link | Timestamp |
-|---|---|---|---|---|---|---|---|---|
+| Roll No. | Name | Certificate Type | Certificate Category | Position/Rank | Event/Course/Activity | Issuing Body | Date | File Link | Timestamp |
+|---|---|---|---|---|---|---|---|---|---|
 
 `Certificate Type` has three fixed categories — Participation, Appreciation,
 Merit — plus a free-text "Other" case: whatever short phrase follows
 "Certificate of ___" on the certificate (e.g. "Completion", "Excellence"),
 stored directly as the cell value rather than the literal word "Other".
 Not validated against an enum server-side, since arbitrary text is valid.
+
+`Certificate Category` ∈ {Paper/Poster/Project Presentation, Online
+Certification/Workshop, Extra-Curricular Activity, Other} — a strictly
+fixed 4-way choice (unlike Certificate Type, no free-text case), IS
+validated against this enum server-side. Independent of Certificate Type —
+e.g. a certificate can be both Type "Merit" and Category "Paper/Poster/
+Project Presentation" at once. Added after the Sheet already had real rows
+in the original column order, so this column was inserted between
+Certificate Type and Position/Rank manually in the Sheet itself — if you're
+setting this up fresh, the column just needs to exist in this position
+before the backend's first write.
 
 `Position/Rank` ∈ {"", Winner, Runner-up, 1st Position, 2nd Position, 3rd Position} —
 left blank unless explicitly stated on the certificate; never inferred from
@@ -77,6 +88,7 @@ compatibility with the original Phase 1 payload):
   "rollNo": "21A91A0501",
   "name": "Jane Doe",
   "certificateType": "Participation",
+  "certificateCategory": "Paper/Poster/Project Presentation",
   "positionRank": "",
   "event": "National Level Hackathon",
   "issuingBody": "XYZ College",
@@ -104,7 +116,7 @@ Or, for images (sent directly to Gemini's vision input, no OCR step):
 { "action": "structure", "imageBase64": "<base64, no data: prefix>", "mimeType": "image/jpeg" }
 ```
 
-Response: `{ "success": true, "fields": { "Name": "...", "Certificate Type": "...", "Position/Rank": "...", "Event/Course/Activity": "...", "Issuing Body": "...", "Date": "..." } }`
+Response: `{ "success": true, "fields": { "Name": "...", "Certificate Type": "...", "Certificate Category": "...", "Position/Rank": "...", "Event/Course/Activity": "...", "Issuing Body": "...", "Date": "..." } }`
 or on error: `{ "success": false, "error": "..." }`
 
 ### Why base64 JSON instead of multipart/form-data
@@ -193,6 +205,7 @@ cat > /tmp/payload.json <<EOF
   "rollNo": "TEST001",
   "name": "Test Student",
   "certificateType": "Participation",
+  "certificateCategory": "Paper/Poster/Project Presentation",
   "positionRank": "",
   "event": "Test Hackathon",
   "issuingBody": "Test College",
@@ -281,7 +294,7 @@ curl -X POST \
 Expected response (values will vary with the exact text):
 
 ```json
-{"success":true,"fields":{"Name":"Jane Doe","Certificate Type":"Participation","Position/Rank":"","Event/Course/Activity":"National Level Hackathon 2026","Issuing Body":"XYZ College","Date":"Mar 2026"}}
+{"success":true,"fields":{"Name":"Jane Doe","Certificate Type":"Participation","Certificate Category":"Paper/Poster/Project Presentation","Position/Rank":"","Event/Course/Activity":"National Level Hackathon 2026","Issuing Body":"XYZ College","Date":"Mar 2026"}}
 ```
 
 Try a payload whose text includes an explicit rank (e.g. "...awarded 1st

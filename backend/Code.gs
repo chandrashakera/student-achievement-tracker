@@ -14,7 +14,8 @@
  *   "action": "submit",
  *   "rollNo": "21A91A0501",
  *   "name": "...",
- *   "certificateType": "Participation" | "Appreciation" | "Position",
+ *   "certificateType": "Participation" | "Appreciation" | "Merit" | "<custom text>",
+ *   "certificateCategory": "Paper/Poster/Project Presentation" | "Online Certification/Workshop" | "Extra-Curricular Activity" | "Other",
  *   "positionRank": "" | "Winner" | "Runner-up" | "1st Position" | "2nd Position" | "3rd Position",
  *   "event": "...",
  *   "issuingBody": "...",
@@ -34,8 +35,8 @@
  * Tesseract.js, which is why images skip OCR entirely):
  *   { "action": "structure", "imageBase64": "<base64, no data: prefix>", "mimeType": "image/jpeg" }
  * Response: { "success": true, "fields": { "Name": "...", "Certificate Type": "...",
- *             "Position/Rank": "...", "Event/Course/Activity": "...",
- *             "Issuing Body": "...", "Date": "..." } }
+ *             "Certificate Category": "...", "Position/Rank": "...",
+ *             "Event/Course/Activity": "...", "Issuing Body": "...", "Date": "..." } }
  *        or { "success": false, "error": "..." }
  *
  * ---- ONE-TIME SETUP (before deploying) ----
@@ -58,16 +59,31 @@
 
 var SHEET_NAME = 'Submissions'; // rename here if your tab uses a different name
 
+// NOTE: this order must match the actual column order in the live Sheet.
+// "Certificate Category" was inserted between Certificate Type and
+// Position/Rank after the sheet already had real rows in the old order —
+// that required manually inserting a new column at that position in the
+// Sheet itself (Apps Script only writes the header row once, when the
+// sheet is empty; it doesn't reshuffle an existing sheet's columns).
 var HEADERS = [
-  'Roll No.', 'Name', 'Certificate Type', 'Position/Rank',
+  'Roll No.', 'Name', 'Certificate Type', 'Certificate Category', 'Position/Rank',
   'Event/Course/Activity', 'Issuing Body', 'Date', 'File Link', 'Timestamp'
 ];
 
 // Certificate Type has three fixed categories plus a free-text "Other" case
 // (student/Gemini supply their own short phrase, e.g. "Completion",
 // "Excellence" — whatever follows "Certificate of ___"). So unlike
-// Position/Rank below, it's validated as non-empty only, not against an enum.
+// Position/Rank and Certificate Category below, it's validated as
+// non-empty only, not against an enum.
 var CERT_TYPE_DEFAULT = 'Participation';
+
+// Certificate Category is a strictly fixed 4-way choice (unlike Certificate
+// Type, no free-text case) — a broad department-level bucket, independent
+// of Certificate Type (e.g. a hackathon certificate could be BOTH
+// "Paper/Poster/Project Presentation" category AND "Participation" type).
+var ALLOWED_CATEGORIES = ['Paper/Poster/Project Presentation', 'Online Certification/Workshop', 'Extra-Curricular Activity', 'Other'];
+var CATEGORY_DEFAULT = 'Other';
+
 var ALLOWED_POSITIONS = ['', 'Winner', 'Runner-up', '1st Position', '2nd Position', '3rd Position'];
 var GEMINI_MODEL_DEFAULT = 'gemini-3.1-flash-lite'; // gemini-2.0-flash (retired) and gemini-2.5-flash-lite (early-blocked ahead of its Oct 2026 shutdown) both stopped working; verified against this account's live /v1beta/models listing
 
@@ -94,6 +110,7 @@ function handleSubmitRequest_(body) {
     rollNo: body.rollNo,
     name: body.name,
     certificateType: body.certificateType,
+    certificateCategory: body.certificateCategory,
     positionRank: body.positionRank || '',
     event: body.event,
     issuingBody: body.issuingBody,
@@ -135,7 +152,7 @@ function parseRequestBody_(e) {
 
 function validatePayload_(body) {
   var required = [
-    'rollNo', 'name', 'certificateType', 'event',
+    'rollNo', 'name', 'certificateType', 'certificateCategory', 'event',
     'issuingBody', 'date', 'fileBase64', 'fileName', 'mimeType'
   ];
   for (var i = 0; i < required.length; i++) {
@@ -143,6 +160,9 @@ function validatePayload_(body) {
     if (!body[key]) {
       throw new Error('Missing required field: ' + key);
     }
+  }
+  if (ALLOWED_CATEGORIES.indexOf(body.certificateCategory) === -1) {
+    throw new Error('Invalid Certificate Category: ' + body.certificateCategory);
   }
   if (body.positionRank && ALLOWED_POSITIONS.indexOf(body.positionRank) === -1) {
     throw new Error('Invalid Position/Rank: ' + body.positionRank);
@@ -163,6 +183,7 @@ function appendRow_(fields) {
     fields.rollNo,
     fields.name,
     fields.certificateType,
+    fields.certificateCategory,
     fields.positionRank,
     fields.event,
     fields.issuingBody,
@@ -258,6 +279,10 @@ function callGeminiForStructuring_(input) {
 function sanitizeGeminiFields_(fields) {
   fields = fields || {};
   var certificateType = fields['Certificate Type'] || CERT_TYPE_DEFAULT;
+  var certificateCategory = fields['Certificate Category'];
+  if (ALLOWED_CATEGORIES.indexOf(certificateCategory) === -1) {
+    certificateCategory = CATEGORY_DEFAULT;
+  }
   var positionRank = fields['Position/Rank'];
   if (ALLOWED_POSITIONS.indexOf(positionRank) === -1) {
     positionRank = '';
@@ -265,6 +290,7 @@ function sanitizeGeminiFields_(fields) {
   return {
     'Name': fields['Name'] || '',
     'Certificate Type': certificateType,
+    'Certificate Category': certificateCategory,
     'Position/Rank': positionRank,
     'Event/Course/Activity': fields['Event/Course/Activity'] || '',
     'Issuing Body': fields['Issuing Body'] || '',
