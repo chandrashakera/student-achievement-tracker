@@ -21,7 +21,15 @@ Full spec: [claude_code_build_brief.md](claude_code_build_brief.md)
   fresh elsewhere.
 - **Live at [a.chandrashaker.in](https://a.chandrashaker.in)**, deployed via
   Cloudflare Pages (repo: [chandrashakera/student-achievement-tracker](https://github.com/chandrashakera/student-achievement-tracker),
-  branch `main`, build output directory `frontend`).
+  branch `main`, build output directory `frontend`). Auto-deploys on push.
+- **Part of a small personal-site ecosystem**: every screen has a persistent
+  footer linking to [apps.chandrashaker.in](https://apps.chandrashaker.in)
+  (an apps portfolio/directory — a separate site, not in this repo), the
+  main site [chandrashaker.in](https://chandrashaker.in), and a shared
+  Privacy notice. `frontend/privacy.html` is now just a redirect stub (not
+  a standalone policy) pointing to the consolidated notice hosted at
+  `apps.chandrashaker.in/privacy.html`, kept only so old bookmarks/indexed
+  links still resolve.
 
 ## Repo layout
 
@@ -331,7 +339,27 @@ Note: `frontend/config.js` currently points at the `/exec` URL from your
 Phase 1 deployment — if you ever create a new deployment (rather than a new
 version of the same one), update `CONFIG.WEBAPP_URL` there.
 
-## Deploying the frontend (GitHub Pages or Vercel, free tier)
+## Deploying the frontend
+
+**What's actually live** (a.chandrashaker.in): **Cloudflare Pages**, connected
+to this GitHub repo.
+
+- Cloudflare dashboard > Workers & Pages > Create application > Pages >
+  Connect to Git > select this repo.
+- Build settings: **Framework preset** None, **Build command** empty (static
+  site, no build step), **Build output directory** `frontend`.
+- Add the custom domain (Custom domains tab) once the default `*.pages.dev`
+  URL confirms the deploy works.
+- Pushes to `main` auto-deploy. If a push doesn't trigger a new deployment,
+  check that the Cloudflare "Workers & Pages" GitHub App actually has access
+  to this repo (GitHub > Settings > Applications > Installed GitHub Apps >
+  Cloudflare Workers & Pages > Configure > Repository access) — Cloudflare
+  Pages uses a GitHub App installation for this, not a classic repo webhook,
+  so it won't show up under this repo's own Settings > Webhooks.
+
+**GitHub Pages or Vercel** also work fine if you'd rather not use Cloudflare
+(this was the original free-tier hosting plan before Cloudflare Pages was
+chosen to match the rest of the chandrashaker.in ecosystem):
 
 - **GitHub Pages:** push this repo to GitHub, then Settings > Pages > Deploy
   from a branch > select the branch and set the folder to `/frontend` (or
@@ -340,6 +368,7 @@ version of the same one), update `CONFIG.WEBAPP_URL` there.
 - **Vercel:** `vercel` CLI or the dashboard, set the project's root directory
   to `frontend/`, no build command needed (static site).
 
-Either way, the deployed site must be served over **HTTPS** for the service
-worker (installability) and camera capture to work reliably on mobile —
-both GitHub Pages and Vercel give you HTTPS by default.
+Whichever host you use, the deployed site must be served over **HTTPS** for
+the service worker (installability) and camera capture to work reliably on
+mobile — Cloudflare Pages, GitHub Pages, and Vercel all give you HTTPS by
+default.
